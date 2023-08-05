@@ -2,7 +2,9 @@ package com.driver.services;
 
 
 import com.driver.EntryDto.BookTicketEntryDto;
+import com.driver.model.Passenger;
 import com.driver.model.Station;
+import com.driver.model.Ticket;
 import com.driver.model.Train;
 import com.driver.repository.PassengerRepository;
 import com.driver.repository.TicketRepository;
@@ -10,6 +12,7 @@ import com.driver.repository.TrainRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
@@ -41,19 +44,73 @@ public class TicketService {
         //Save the bookedTickets in the train Object
         //Also in the passenger Entity change the attribute bookedTickets by using the attribute bookingPersonId.
        //And the end return the ticketId that has come from db
-        Optional<Train> optinalTrain = trainRepository.findById(bookTicketEntryDto.getTrainId());
-        Train train = optinalTrain.get();
-        if(train.getNoOfSeats()<bookTicketEntryDto.getNoOfSeats())throw new Exception("Less tickets are available");
-        List<String> routs = Arrays.asList(train.getRoute().split(","));
-        Boolean flag=false;
-        int count=0;
-        for(String r:routs){
-            if(r.equals(bookTicketEntryDto.getFromStation()))flag=true;
-            if(flag)count++;
-            if(r.equals(bookTicketEntryDto.getToStation()))break;
+//        Optional<Train> optinalTrain = trainRepository.findById(bookTicketEntryDto.getTrainId());
+//        Train train = optinalTrain.get();
+//        if(train.getNoOfSeats()<bookTicketEntryDto.getNoOfSeats())throw new Exception("Less tickets are available");
+//        List<String> routs = Arrays.asList(train.getRoute().split(","));
+//        Boolean flag=false;
+//        int count=0;
+//        for(String r:routs){
+//            if(r.equals(bookTicketEntryDto.getFromStation()))flag=true;
+//            if(flag)count++;
+//            if(r.equals(bookTicketEntryDto.getToStation()))break;
+//        }
+//
+//       return null;
+
+        Train train=trainRepository.findById(bookTicketEntryDto.getTrainId()).get();
+        int bookedSeats=0;
+        List<Ticket>booked=train.getBookedTickets();
+        for(Ticket ticket:booked){
+            bookedSeats+=ticket.getPassengersList().size();
         }
 
-       return null;
+        if(bookedSeats+bookTicketEntryDto.getNoOfSeats()> train.getNoOfSeats()){
+            throw new Exception("Less tickets are available");
+        }
+
+        String stations[]=train.getRoute().split(",");
+        List<Passenger>passengerList=new ArrayList<>();
+        List<Integer>ids=bookTicketEntryDto.getPassengerIds();
+        for(int id: ids){
+            passengerList.add(passengerRepository.findById(id).get());
+        }
+        int x=-1,y=-1;
+        for(int i=0;i<stations.length;i++){
+            if(bookTicketEntryDto.getFromStation().toString().equals(stations[i])){
+                x=i;
+                break;
+            }
+        }
+        for(int i=0;i<stations.length;i++){
+            if(bookTicketEntryDto.getToStation().toString().equals(stations[i])){
+                y=i;
+                break;
+            }
+        }
+        if(x==-1||y==-1||y-x<0){
+            throw new Exception("Invalid stations");
+        }
+        Ticket ticket=new Ticket();
+        ticket.setPassengersList(passengerList);
+        ticket.setFromStation(bookTicketEntryDto.getFromStation());
+        ticket.setToStation(bookTicketEntryDto.getToStation());
+
+        int fair=0;
+        fair=bookTicketEntryDto.getNoOfSeats()*(y-x)*300;
+
+        ticket.setTotalFare(fair);
+        ticket.setTrain(train);
+
+        train.getBookedTickets().add(ticket);
+        train.setNoOfSeats(train.getNoOfSeats()-bookTicketEntryDto.getNoOfSeats());
+
+        Passenger passenger=passengerRepository.findById(bookTicketEntryDto.getBookingPersonId()).get();
+        passenger.getBookedTickets().add(ticket);
+
+        trainRepository.save(train);
+
+        return ticketRepository.save(ticket).getTicketId();
 
     }
 }
